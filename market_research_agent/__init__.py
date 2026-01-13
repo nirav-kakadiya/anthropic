@@ -1,7 +1,7 @@
 """
-Market Research Agent v2.3 - Complete AI Market Research Suite
+Market Research Agent v2.4 - Complete AI Market Research Suite
 
-ULTIMATE MARKET RESEARCH PLATFORM!
+FULLY AUTOMATIC MARKET RESEARCH - ZERO MANUAL INPUT!
 
 Features:
 1. AUTO MODE: Just provide URL -> auto-detects features & niche
@@ -50,7 +50,7 @@ Quick Start:
     run_dashboard(port=5000)
 """
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 __author__ = "Market Research Agent"
 
 # Core website analysis
@@ -176,6 +176,17 @@ from .web_dashboard import (
     create_app,
 )
 
+# Full Auto Agent (ZERO MANUAL INPUT!)
+from .full_auto_agent import (
+    FullAutoAgent,
+    FullAutoResult,
+    RankedKeyword,
+    ActionItem,
+    create_full_auto_agent,
+    quick_scan,
+    quick_scan_sync,
+)
+
 __all__ = [
     # Version
     "__version__",
@@ -299,4 +310,13 @@ __all__ = [
     "create_flask_app",
     "run_dashboard",
     "create_app",
+
+    # Full Auto Agent (ZERO INPUT!)
+    "FullAutoAgent",
+    "FullAutoResult",
+    "RankedKeyword",
+    "ActionItem",
+    "create_full_auto_agent",
+    "quick_scan",
+    "quick_scan_sync",
 ]
