@@ -1,57 +1,56 @@
 """
-Market Research Agent v2.2 - Complete AI Market Research Suite
+Market Research Agent v2.4 - Complete AI Market Research Suite
 
-BETTER THAN SCOUT V3! Now with AUTO MODE!
+FULLY AUTOMATIC MARKET RESEARCH - ZERO MANUAL INPUT!
 
 Features:
 1. AUTO MODE: Just provide URL -> auto-detects features & niche
-2. Website analysis with sitemap/robots.txt parsing
-3. Automatic feature extraction from pages
-4. Automatic niche/industry detection
-5. Reddit scraping (r/StableDiffusion, r/comfyui, r/generativeAI, etc.)
-6. Product Hunt launch monitoring
-7. Hacker News discussion tracking
-8. AI model/tool detection (100+ patterns)
-9. Gap analysis vs your existing features
-10. Keyword clustering
-11. Trend scoring with recommendations
-12. Scout V3-style formatted output
+2. LIVE FETCHER: Async HTTP with rate limiting and retries
+3. COMPETITOR COMPARE: Side-by-side multi-competitor analysis
+4. ALERTS: Discord & Slack webhook notifications
+5. STORAGE: SQLite database for scan history & trends
+6. SCHEDULER: Automated daily/weekly/hourly scans
+7. EXPORTER: CSV, Excel, PDF, HTML, Markdown exports
+8. WEB DASHBOARD: Flask-based UI for easy access
+9. Reddit, Product Hunt, Hacker News scraping
+10. AI model/tool detection (100+ patterns)
+11. Gap analysis with "Why it's a gap" explanations
+12. Keyword clustering and trend scoring
 
-Usage (AUTO MODE - just provide URL):
+Quick Start:
     from market_research_agent import AutoScoutAgent
 
-    # Create agent from URL - auto-detects everything!
+    # AUTO MODE
     agent = AutoScoutAgent.from_url("https://your-site.com")
-
-    # Get URLs to crawl
-    urls = agent.get_site_urls()
-
-    # Feed HTML content
-    agent.process_page("home", homepage_html)
-    agent.process_page("features", features_html)
-
-    # Auto-detect features and niche
+    agent.process_page("home", html)
     config = agent.auto_detect()
-    print(f"Detected: {config.detected_niche}")
-    print(f"Features: {len(config.detected_features)}")
+    result = agent.run_research()
 
-    # Optionally add manual features
-    agent.add_manual_features(["custom feature"])
-
-    # Run research
-    result = agent.run_research(reddit_data, ph_data, hn_data)
-
-Usage (MANUAL MODE - provide features directly):
-    from market_research_agent import AutoScoutAgent
-
+    # MANUAL MODE
     agent = AutoScoutAgent.manual(
-        features=["flux ai", "kling ai", "ai upscaler"],
-        niche="AI image/video platform"
+        features=["flux ai", "kling ai"],
+        niche="AI platform"
     )
-    result = agent.run_research(reddit_data, ph_data, hn_data)
+    result = agent.run_research()
+
+    # COMPETITOR ANALYSIS
+    from market_research_agent import CompetitorCompare
+    compare = CompetitorCompare(your_url, your_features)
+    compare.add_competitor(url, name, features)
+    analysis = compare.analyze()
+
+    # ALERTS
+    from market_research_agent import AlertManager
+    alerts = AlertManager()
+    alerts.add_discord("webhook_url")
+    alerts.notify_trend("flux 2.0", score=95, source="Reddit")
+
+    # WEB DASHBOARD
+    from market_research_agent import run_dashboard
+    run_dashboard(port=5000)
 """
 
-__version__ = "2.2.0"
+__version__ = "2.4.0"
 __author__ = "Market Research Agent"
 
 # Core website analysis
@@ -114,6 +113,78 @@ from .niche_detector import (
     NicheResult,
     detect_niche,
     detect_niche_from_features,
+)
+
+# Live Fetcher (async HTTP with rate limiting)
+from .live_fetcher import (
+    LiveFetcher,
+    FetchResult,
+    SiteScanner,
+    create_fetcher,
+)
+
+# Competitor Comparison
+from .competitor_compare import (
+    CompetitorCompare,
+    CompetitorProfile,
+    CompetitiveGap,
+    CompetitorAnalysis,
+    compare_competitors,
+)
+
+# Alerts (Discord, Slack)
+from .alerts import (
+    AlertManager,
+    Alert,
+    AlertType,
+    AlertPriority,
+    DiscordWebhook,
+    SlackWebhook,
+    create_alert_manager,
+)
+
+# Storage (SQLite database)
+from .storage import (
+    ScanStorage,
+    StoredScan,
+    KeywordHistory,
+    create_storage,
+)
+
+# Scheduler (automated scans)
+from .scheduler import (
+    ScanScheduler,
+    ScheduledTask,
+    ScheduleInterval,
+    TaskResult,
+    create_scheduler,
+)
+
+# Exporter (CSV, Excel, PDF, HTML, Markdown)
+from .exporter import (
+    ReportExporter,
+    ExportOptions,
+    export_report,
+    create_exporter,
+)
+
+# Web Dashboard
+from .web_dashboard import (
+    DashboardApp,
+    create_flask_app,
+    run_dashboard,
+    create_app,
+)
+
+# Full Auto Agent (ZERO MANUAL INPUT!)
+from .full_auto_agent import (
+    FullAutoAgent,
+    FullAutoResult,
+    RankedKeyword,
+    ActionItem,
+    create_full_auto_agent,
+    quick_scan,
+    quick_scan_sync,
 )
 
 __all__ = [
@@ -192,4 +263,60 @@ __all__ = [
     # Formatting
     "ScoutFormatter",
     "format_scout_output",
+
+    # Live Fetcher
+    "LiveFetcher",
+    "FetchResult",
+    "SiteScanner",
+    "create_fetcher",
+
+    # Competitor Comparison
+    "CompetitorCompare",
+    "CompetitorProfile",
+    "CompetitiveGap",
+    "CompetitorAnalysis",
+    "compare_competitors",
+
+    # Alerts
+    "AlertManager",
+    "Alert",
+    "AlertType",
+    "AlertPriority",
+    "DiscordWebhook",
+    "SlackWebhook",
+    "create_alert_manager",
+
+    # Storage
+    "ScanStorage",
+    "StoredScan",
+    "KeywordHistory",
+    "create_storage",
+
+    # Scheduler
+    "ScanScheduler",
+    "ScheduledTask",
+    "ScheduleInterval",
+    "TaskResult",
+    "create_scheduler",
+
+    # Exporter
+    "ReportExporter",
+    "ExportOptions",
+    "export_report",
+    "create_exporter",
+
+    # Web Dashboard
+    "DashboardApp",
+    "create_flask_app",
+    "run_dashboard",
+    "create_app",
+
+    # Full Auto Agent (ZERO INPUT!)
+    "FullAutoAgent",
+    "FullAutoResult",
+    "RankedKeyword",
+    "ActionItem",
+    "create_full_auto_agent",
+    "quick_scan",
+    "quick_scan_sync",
 ]
