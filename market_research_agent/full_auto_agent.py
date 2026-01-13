@@ -252,45 +252,51 @@ class FullAutoAgent:
             self._detected_niche_key = "default"
 
     async def _scrape_trend_sources(self):
-        """Scrape Reddit, Product Hunt, Hacker News for trends."""
+        """Scrape multiple trend sources for latest keywords."""
         all_keywords = {}
 
-        # Get relevant subreddits
-        subreddits = self.NICHE_SUBREDDITS.get(
-            self._detected_niche_key,
-            self.NICHE_SUBREDDITS["default"]
-        )
+        # Use new TrendSources for comprehensive scraping
+        try:
+            from .trend_sources import TrendSources
+            trend_sources = TrendSources()
 
-        # Scrape Reddit
-        for subreddit in subreddits[:5]:  # Limit to 5 subreddits
-            url = f"https://old.reddit.com/r/{subreddit}/hot/.json"
-            result = await self.fetcher.fetch(url)
+            # Select categories based on detected niche
+            categories = ["ai", "tech"]
+            if self._detected_niche_key == "saas":
+                categories.append("startup")
 
-            if result.status_code == 200:
-                self.result.sources_scraped.append(f"r/{subreddit}")
-                keywords = self._extract_keywords_from_reddit(result.content, subreddit)
-                for kw, data in keywords.items():
-                    if kw in all_keywords:
-                        all_keywords[kw]["count"] += data["count"]
-                        all_keywords[kw]["sources"].append(data["source"])
-                    else:
-                        all_keywords[kw] = data
+            # Fetch from all sources
+            items = await trend_sources.fetch_all(categories=categories)
 
-        # Scrape Hacker News (Algolia API)
-        hn_queries = ["AI", "startup", "saas", "machine learning"]
-        for query in hn_queries[:2]:
-            url = f"https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=30"
-            result = await self.fetcher.fetch(url)
+            # Extract keywords from trend items
+            for item in items:
+                self.result.sources_scraped.append(item.source)
 
-            if result.status_code == 200:
-                self.result.sources_scraped.append("Hacker News")
-                keywords = self._extract_keywords_from_hn(result.content)
-                for kw, data in keywords.items():
-                    if kw in all_keywords:
-                        all_keywords[kw]["count"] += data["count"]
-                        all_keywords[kw]["sources"].append(data["source"])
-                    else:
-                        all_keywords[kw] = data
+                # Add keywords from the item
+                for kw in item.keywords:
+                    if kw not in all_keywords:
+                        all_keywords[kw] = {"count": 0, "sources": [], "total_score": 0}
+                    all_keywords[kw]["count"] += 1
+                    all_keywords[kw]["sources"].append(item.source)
+                    all_keywords[kw]["total_score"] += item.score
+
+                # Also extract from title
+                detected = self.ai_detector.detect(item.title)
+                for det_item in detected:
+                    kw = det_item.name.lower()
+                    if kw not in all_keywords:
+                        all_keywords[kw] = {"count": 0, "sources": [], "total_score": 0}
+                    all_keywords[kw]["count"] += 1
+                    all_keywords[kw]["sources"].append(item.source)
+                    all_keywords[kw]["total_score"] += item.score
+
+            # Deduplicate sources
+            self.result.sources_scraped = list(set(self.result.sources_scraped))
+
+        except Exception as e:
+            # Fallback to basic scraping if TrendSources fails
+            print(f"   (Using fallback scraping: {e})")
+            await self._scrape_basic_sources(all_keywords)
 
         # Convert to RankedKeyword objects
         for kw, data in all_keywords.items():
@@ -305,6 +311,45 @@ class FullAutoAgent:
             self.result.all_keywords.append(ranked)
 
         self.result.total_keywords = len(self.result.all_keywords)
+
+    async def _scrape_basic_sources(self, all_keywords: dict):
+        """Fallback basic scraping if TrendSources unavailable."""
+        # Get relevant subreddits
+        subreddits = self.NICHE_SUBREDDITS.get(
+            self._detected_niche_key,
+            self.NICHE_SUBREDDITS["default"]
+        )
+
+        # Scrape Reddit
+        for subreddit in subreddits[:5]:
+            url = f"https://old.reddit.com/r/{subreddit}/hot/.json"
+            result = await self.fetcher.fetch(url)
+
+            if result.status_code == 200:
+                self.result.sources_scraped.append(f"r/{subreddit}")
+                keywords = self._extract_keywords_from_reddit(result.content, subreddit)
+                for kw, data in keywords.items():
+                    if kw in all_keywords:
+                        all_keywords[kw]["count"] += data["count"]
+                        all_keywords[kw]["sources"].append(data["source"])
+                    else:
+                        all_keywords[kw] = data
+
+        # Scrape Hacker News
+        hn_queries = ["AI", "startup", "machine learning"]
+        for query in hn_queries[:2]:
+            url = f"https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=30"
+            result = await self.fetcher.fetch(url)
+
+            if result.status_code == 200:
+                self.result.sources_scraped.append("Hacker News")
+                keywords = self._extract_keywords_from_hn(result.content)
+                for kw, data in keywords.items():
+                    if kw in all_keywords:
+                        all_keywords[kw]["count"] += data["count"]
+                        all_keywords[kw]["sources"].append(data["source"])
+                    else:
+                        all_keywords[kw] = data
 
     def _extract_keywords_from_reddit(self, json_content: str, subreddit: str) -> dict:
         """Extract keywords from Reddit JSON."""

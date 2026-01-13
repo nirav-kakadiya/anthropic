@@ -1,5 +1,5 @@
 """
-Market Research Agent v2.4 - Complete AI Market Research Suite
+Market Research Agent v2.5 - Complete AI Market Research Suite
 
 FULLY AUTOMATIC MARKET RESEARCH - ZERO MANUAL INPUT!
 
@@ -16,6 +16,10 @@ Features:
 10. AI model/tool detection (100+ patterns)
 11. Gap analysis with "Why it's a gap" explanations
 12. Keyword clustering and trend scoring
+13. TREND SOURCES: 15+ sources (GitHub, HN, Reddit, Dev.to, Lobste.rs, ArXiv)
+    - "hottest" vs "realtime" classification (inspired by NewsNow)
+    - Auto-extracts AI keywords from trending items
+    - Ranks keywords by occurrence and score
 
 Quick Start:
     from market_research_agent import AutoScoutAgent
@@ -48,9 +52,15 @@ Quick Start:
     # WEB DASHBOARD
     from market_research_agent import run_dashboard
     run_dashboard(port=5000)
+
+    # TREND SOURCES (Multi-platform trends)
+    from market_research_agent import TrendSources
+    sources = TrendSources()
+    items = await sources.fetch_all(categories=["ai", "tech"])
+    top_keywords = sources.get_top_keywords(items, limit=30)
 """
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 __author__ = "Market Research Agent"
 
 # Core website analysis
@@ -187,6 +197,14 @@ from .full_auto_agent import (
     quick_scan_sync,
 )
 
+# Trend Sources (Multi-platform trend fetching inspired by NewsNow)
+from .trend_sources import (
+    TrendSources,
+    TrendItem,
+    SourceConfig,
+    create_trend_sources,
+)
+
 __all__ = [
     # Version
     "__version__",
@@ -319,4 +337,10 @@ __all__ = [
     "create_full_auto_agent",
     "quick_scan",
     "quick_scan_sync",
+
+    # Trend Sources (Multi-platform)
+    "TrendSources",
+    "TrendItem",
+    "SourceConfig",
+    "create_trend_sources",
 ]
