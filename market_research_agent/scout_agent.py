@@ -430,3 +430,319 @@ def create_scout_agent(features: list[str], niche: str = "") -> ScoutAgent:
         your_features=features,
         niche=niche or "AI image/video/audio creation platform"
     )
+
+
+# =============================================================================
+# AUTO MODE - Automatically detect features and niche from URL
+# =============================================================================
+
+from .site_analyzer import SiteAnalyzer, SiteStructure
+from .feature_extractor import FeatureExtractor, extract_features_from_html
+from .niche_detector import NicheDetector, NicheResult
+
+
+@dataclass
+class AutoScanConfig:
+    """Configuration for auto scanning."""
+    url: str
+    mode: str = "auto"  # "auto" or "manual"
+
+    # Auto-detected (populated after site analysis)
+    detected_features: list[str] = field(default_factory=list)
+    detected_niche: str = ""
+    niche_confidence: float = 0.0
+
+    # Manual overrides (optional)
+    manual_features: list[str] = field(default_factory=list)
+    manual_niche: str = ""
+
+    # Final values (auto + manual merged)
+    final_features: list[str] = field(default_factory=list)
+    final_niche: str = ""
+
+
+class AutoScoutAgent:
+    """
+    Scout Agent with AUTO MODE.
+
+    Two modes:
+    1. AUTO: Provide URL -> crawls sitemap/site -> extracts features -> detects niche -> runs gap analysis
+    2. MANUAL: Provide features + niche directly -> runs gap analysis
+
+    Usage (Auto Mode):
+        agent = AutoScoutAgent.from_url("https://example.com")
+
+        # Step 1: Get URLs to crawl
+        urls = agent.get_site_urls()
+
+        # Step 2: Feed HTML content
+        agent.process_page("home", html)
+        agent.process_page("features", html)
+
+        # Step 3: Auto-detect features and niche
+        config = agent.auto_detect()
+        print(f"Detected niche: {config.detected_niche}")
+        print(f"Detected features: {config.detected_features}")
+
+        # Step 4 (optional): Add manual features
+        agent.add_manual_features(["custom feature 1", "custom feature 2"])
+
+        # Step 5: Run market research
+        result = agent.run_research()
+
+    Usage (Manual Mode):
+        agent = AutoScoutAgent.manual(
+            features=["flux ai", "kling ai", "ai upscaler"],
+            niche="AI image/video platform"
+        )
+        result = agent.run_research()
+    """
+
+    def __init__(self, url: Optional[str] = None, mode: str = "auto"):
+        self.mode = mode
+        self.url = url
+
+        # Site analysis components
+        self.site_analyzer: Optional[SiteAnalyzer] = None
+        self.feature_extractor = FeatureExtractor()
+        self.niche_detector = NicheDetector()
+
+        # Config
+        self.config = AutoScanConfig(url=url or "", mode=mode)
+
+        # Page content storage
+        self.page_content: dict[str, str] = {}
+
+        # Scout agent (created after detection)
+        self._scout_agent: Optional[ScoutAgent] = None
+
+        # Initialize site analyzer if URL provided
+        if url:
+            self.site_analyzer = SiteAnalyzer(url)
+
+    @classmethod
+    def from_url(cls, url: str) -> "AutoScoutAgent":
+        """Create AutoScoutAgent in AUTO mode from URL."""
+        return cls(url=url, mode="auto")
+
+    @classmethod
+    def manual(cls, features: list[str], niche: str) -> "AutoScoutAgent":
+        """Create AutoScoutAgent in MANUAL mode."""
+        agent = cls(mode="manual")
+        agent.config.manual_features = features
+        agent.config.manual_niche = niche
+        agent.config.final_features = features
+        agent.config.final_niche = niche
+        return agent
+
+    def get_site_urls(self) -> dict:
+        """
+        Get URLs to fetch for site analysis.
+
+        Returns dict with categorized URLs:
+        - robots_txt: URL for robots.txt
+        - sitemap: URL for sitemap.xml
+        - pages: List of {url, type, priority} for key pages
+        """
+        if not self.site_analyzer:
+            return {"error": "No URL provided. Use from_url() or provide URL."}
+
+        urls = self.site_analyzer.get_urls_to_fetch()
+        return {
+            "base_url": self.site_analyzer.base_url,
+            "robots_txt": urls["robots_txt"],
+            "sitemap": urls["sitemap"],
+            "pages": [
+                {"url": urls["homepage"], "type": "home", "priority": 1.0},
+                {"url": urls["key_pages"]["features"], "type": "features", "priority": 0.9},
+                {"url": urls["key_pages"]["pricing"], "type": "pricing", "priority": 0.8},
+                {"url": urls["key_pages"]["about"], "type": "about", "priority": 0.7},
+            ],
+            "instructions": """
+            1. Fetch robots.txt and pass to process_robots_txt()
+            2. Fetch sitemap.xml and pass to process_sitemap()
+            3. Fetch each page and pass to process_page(type, html)
+            4. Call auto_detect() to get detected features/niche
+            5. Optionally add_manual_features() for custom additions
+            6. Call run_research() for gap analysis
+            """
+        }
+
+    def process_robots_txt(self, content: str) -> list[str]:
+        """Process robots.txt to find additional sitemaps."""
+        if self.site_analyzer:
+            return self.site_analyzer.parse_robots_txt(content)
+        return []
+
+    def process_sitemap(self, xml_content: str) -> int:
+        """Process sitemap.xml. Returns number of URLs found."""
+        if self.site_analyzer:
+            entries = self.site_analyzer.parse_sitemap_xml(xml_content)
+            return len(entries)
+        return 0
+
+    def process_page(self, page_type: str, html: str):
+        """
+        Process page HTML for feature extraction.
+
+        Args:
+            page_type: "home", "features", "pricing", "about"
+            html: Raw HTML content
+        """
+        self.page_content[page_type] = html
+
+        # Update site analyzer
+        if self.site_analyzer:
+            self.site_analyzer.process_page_html(page_type, html)
+
+        # Extract features based on page type
+        if page_type == "features":
+            self.feature_extractor.extract_from_features_page(html)
+        elif page_type == "pricing":
+            self.feature_extractor.extract_from_pricing_page(html)
+        else:
+            self.feature_extractor.extract_from_html(html, page_type)
+
+    def auto_detect(self) -> AutoScanConfig:
+        """
+        Run auto-detection of features and niche.
+
+        Returns AutoScanConfig with detected values.
+        """
+        if self.mode != "auto":
+            return self.config
+
+        # Get detected features
+        feature_result = self.feature_extractor.get_result()
+        self.config.detected_features = feature_result.feature_names[:50]
+
+        # Get site structure for niche detection
+        structure = None
+        if self.site_analyzer:
+            structure = self.site_analyzer.get_structure()
+
+        # Detect niche
+        niche_result = self.niche_detector.detect(
+            homepage_text=self.page_content.get("home", ""),
+            features_text=self.page_content.get("features", ""),
+            pricing_text=self.page_content.get("pricing", ""),
+            about_text=self.page_content.get("about", ""),
+            site_title=structure.site_title if structure else "",
+            site_description=structure.site_description if structure else ""
+        )
+
+        self.config.detected_niche = niche_result.primary_niche
+        self.config.niche_confidence = niche_result.confidence
+
+        # Merge with manual overrides
+        self._merge_config()
+
+        return self.config
+
+    def add_manual_features(self, features: list[str]):
+        """Add manual features to supplement auto-detected ones."""
+        self.config.manual_features.extend(features)
+        self._merge_config()
+
+    def set_manual_niche(self, niche: str):
+        """Override or set the niche manually."""
+        self.config.manual_niche = niche
+        self._merge_config()
+
+    def _merge_config(self):
+        """Merge auto-detected and manual values."""
+        # Combine features (manual takes precedence)
+        all_features = list(self.config.manual_features)
+        for f in self.config.detected_features:
+            if f.lower() not in [m.lower() for m in all_features]:
+                all_features.append(f)
+        self.config.final_features = all_features
+
+        # Niche: manual overrides auto
+        self.config.final_niche = (
+            self.config.manual_niche or
+            self.config.detected_niche or
+            "Unknown niche"
+        )
+
+    def get_scout_agent(self) -> ScoutAgent:
+        """Get the underlying ScoutAgent with detected/manual config."""
+        if not self._scout_agent:
+            if not self.config.final_features:
+                self._merge_config()
+
+            self._scout_agent = ScoutAgent(
+                your_features=self.config.final_features,
+                niche=self.config.final_niche
+            )
+
+        return self._scout_agent
+
+    def get_research_plan(self) -> dict:
+        """Get the research plan (URLs to fetch for gap analysis)."""
+        agent = self.get_scout_agent()
+        return agent.get_scan_plan()
+
+    def run_research(
+        self,
+        reddit_data: Optional[dict[str, list[dict]]] = None,
+        ph_data: Optional[list[dict]] = None,
+        hn_data: Optional[list[dict]] = None
+    ) -> ScanResult:
+        """
+        Run the market research analysis.
+
+        Args:
+            reddit_data: Reddit posts data (optional)
+            ph_data: Product Hunt data (optional)
+            hn_data: Hacker News data (optional)
+
+        Returns:
+            Complete ScanResult
+        """
+        agent = self.get_scout_agent()
+        return agent.analyze(reddit_data, ph_data, hn_data)
+
+    def format_report(self) -> str:
+        """Format the research report."""
+        agent = self.get_scout_agent()
+        return agent.format_report()
+
+    def get_config_summary(self) -> str:
+        """Get summary of current configuration."""
+        lines = [
+            "=" * 60,
+            f"AutoScoutAgent Configuration",
+            "=" * 60,
+            f"Mode: {self.mode.upper()}",
+            f"URL: {self.url or 'N/A'}",
+            "",
+            f"Detected Niche: {self.config.detected_niche or 'Not detected'}",
+            f"Niche Confidence: {self.config.niche_confidence:.0%}",
+            f"Detected Features: {len(self.config.detected_features)}",
+            "",
+            f"Manual Niche: {self.config.manual_niche or 'Not set'}",
+            f"Manual Features: {len(self.config.manual_features)}",
+            "",
+            "Final Configuration:",
+            f"  Niche: {self.config.final_niche}",
+            f"  Features: {len(self.config.final_features)}",
+        ]
+
+        if self.config.final_features:
+            lines.append("")
+            lines.append("Top Features:")
+            for f in self.config.final_features[:10]:
+                lines.append(f"  • {f}")
+
+        return "\n".join(lines)
+
+
+def create_auto_scout(url: str) -> AutoScoutAgent:
+    """Create an AutoScoutAgent in auto mode."""
+    return AutoScoutAgent.from_url(url)
+
+
+def create_manual_scout(features: list[str], niche: str) -> AutoScoutAgent:
+    """Create an AutoScoutAgent in manual mode."""
+    return AutoScoutAgent.manual(features, niche)
